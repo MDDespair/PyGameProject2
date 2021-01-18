@@ -80,6 +80,7 @@ class Settings:
     def __init__(self):
         self.buttons = pg.sprite.Group()
         self.pictures = pg.sprite.Group()
+        self.selection = pg.sprite.Group()
         self.save_btn = Button(self.buttons, 0.8, 0.75, 'save_clicked.png',
                                'save_unclicked.png', SaveBtnEv, folder=r'data\settings')
         self.return_btn = Button(self.buttons, 0.2, 0.75, 'return_clicked.png',
@@ -97,28 +98,48 @@ class Settings:
             def switch_difficulty(self, difficulty_name):
                 self.image = load_image(difficulty_name, folder=self.folder)
 
+        class Selection(Picture):
+            def __init__(self, *args, **kwargs):
+                super().__init__(*args, **kwargs)
+
+            def select(self, difficulty):
+                self.image = load_image(f'{difficulty}selected.png', folder='data/settings/difficulty')
+
+            def unselect(self, difficulty):
+                self.image = load_image(f'{difficulty}notselected.png', folder='data/settings/difficulty')
+
         with open('data/settings.txt', 'r') as f:
             diffifulty = f.read()
             if diffifulty not in DIFFICULTY_LIST:
+                with open('data/settings.txt', 'w') as f:
+                    f.write('easy')
                 diffifulty = 'easy.png'
+                self.difficulty_selection = Selection(self.selection, 0.5, 0.65, f'easyselected.png',
+                                                      folder='data/settings/difficulty')
             else:
                 diffifulty = diffifulty + '.png'
+                self.difficulty_selection = Selection(self.selection, 0.5, 0.65, f'{diffifulty[:-4]}selected.png',
+                                                      folder='data/settings/difficulty')
         self.difficulty_pic = Difficulty(self.pictures, 0.5, 0.45, diffifulty, r'data\settings\difficulty')
 
     def update(self):
         self.pictures.update()
         self.buttons.update()
+        self.selection.update()
 
     def draw(self, surface):
         self.pictures.draw(surface)
         self.buttons.draw(surface)
+        self.selection.draw(surface)
 
 
 class EndScreen:
     def __init__(self):
+        self.hint = None
         self.buttons = pg.sprite.Group()
         self.font = pg.font.SysFont('sen-serif', 72)
         self.update_score()
+        self.hintG = pg.sprite.Group()
         self.return_btn = Button(self.buttons, 0.2, 0.8, 'return_clicked.png',
                                  'return_unclicked.png', BackMenuBtnEv, folder=r'data\endscreen')
         self.restartgame_btn = Button(self.buttons, 0.8, 0.8, 'restart_clicked.png',
@@ -139,9 +160,11 @@ class EndScreen:
         self.show_score(100, 'Top score', self.top_score)
         self.show_score(200, 'Current Score', self.cur_score)
         self.buttons.draw(surface)
+        self.hintG.draw(surface)
 
     def update(self):
         self.buttons.update()
+        self.hintG.update()
 
 
 class BorderBlock(Sprite):
@@ -524,7 +547,9 @@ class Mode:
                 elif ev.type == pg.MOUSEBUTTONDOWN and ev.button == 1:
                     if save:
                         with open('data\settings.txt', 'w') as file:
-                            file.write(DIFFICULTY_LIST[difficulty_ind])
+                            file.write(DIFFICULTY_LIST[difficulty_ind].lower())
+                            difficulty = DIFFICULTY_LIST[difficulty_ind].lower()
+                            settings.difficulty_selection.select(DIFFICULTY_LIST[difficulty_ind].lower())
                     elif returnMenu:
                         self.post('menu')
                         running = False
@@ -532,10 +557,18 @@ class Mode:
                         if difficulty_ind + 1 <= 2:
                             difficulty_ind += 1
                             settings.difficulty_pic.switch_difficulty(DIFFICULTY_LIST[difficulty_ind] + '.png')
+                        if difficulty[:-4] == DIFFICULTY_LIST[difficulty_ind].lower():
+                            settings.difficulty_selection.select(DIFFICULTY_LIST[difficulty_ind].lower())
+                        else:
+                            settings.difficulty_selection.unselect(DIFFICULTY_LIST[difficulty_ind].lower())
                     elif l_a:
                         if difficulty_ind - 1 >= 0:
                             difficulty_ind -= 1
                             settings.difficulty_pic.switch_difficulty(DIFFICULTY_LIST[difficulty_ind] + '.png')
+                            if difficulty[:-4] == DIFFICULTY_LIST[difficulty_ind].lower():
+                                settings.difficulty_selection.select(DIFFICULTY_LIST[difficulty_ind].lower())
+                            else:
+                                settings.difficulty_selection.unselect(DIFFICULTY_LIST[difficulty_ind].lower())
 
             screen.fill((0, 0, 0))
             settings.update()
@@ -566,8 +599,12 @@ class Mode:
                         restartGame = False
                     elif ev.key == 'RSF':
                         restartStats = True
+                        if not endscreen.hintG.sprites():
+                            endscreen.hint = Picture(endscreen.hintG, 0.5, 0.4, 'hint.png', 'data\endscreen')
                     elif ev.key == 'RSUF':
                         restartStats = False
+                        if endscreen.hintG.sprites():
+                            endscreen.hint.kill()
                 elif ev.type == pg.MOUSEBUTTONDOWN and ev.button == 1:
                     if returnMenu:
                         running = False
